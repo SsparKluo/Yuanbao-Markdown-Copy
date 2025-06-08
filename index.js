@@ -9,8 +9,8 @@
 // @grant        none
 // ==/UserScript==
 
-// 鸣谢：本脚本部分思路和实现参考了 [腾讯元宝对话导出器 | Tencent Yuanbao Exporter]（by Gao + Gemini 2.5 Pro），并受益于 GitHub Copilot 及 GPT-4.1 的辅助。
-// Thanks: Some logic and implementation are inspired by [腾讯元宝对话导出器 | Tencent Yuanbao Exporter] (by Gao + Gemini 2.5 Pro), with help from GitHub Copilot and GPT-4.1.
+// 鸣谢：本脚本部分思路和实现参考了 [腾讯元宝对话导出器 | Tencent Yuanbao Exporter](https://greasyfork.org/zh-CN/scripts/532431-%E8%85%BE%E8%AE%AF%E5%85%83%E5%AE%9D%E5%AF%B9%E8%AF%9D%E5%AF%BC%E5%87%BA%E5%99%A8-tencent-yuanbao-exporter)（by Gao + Gemini 2.5 Pro），并受益于 GitHub Copilot 及 GPT-4.1 的辅助。
+// Thanks: Some logic and implementation are inspired by [腾讯元宝对话导出器 | Tencent Yuanbao Exporter](https://greasyfork.org/zh-CN/scripts/532431-%E8%85%BE%E8%AE%AF%E5%85%83%E5%AE%9D%E5%AF%B9%E8%AF%9D%E5%AF%BC%E5%87%BA%E5%99%A8-tencent-yuanbao-exporter) (by Gao + Gemini 2.5 Pro), with help from GitHub Copilot and GPT-4.1.
 
 (function () {
     // --- State Management ---
@@ -77,7 +77,7 @@
                                         // 处理引用格式
                                         let msg = block.msg || '';
                                         if (msg && msg.includes('(@ref)')) {
-                                            msg = msg.replace(/\[(\d+)\]\(@ref\)/g, function(_, n) {
+                                            msg = msg.replace(/\[(\d+)\]\(@ref\)/g, function (_, n) {
                                                 return `[^${n}]`;
                                             });
                                         }
@@ -99,7 +99,7 @@
                                             });
                                             let text = block.msg || block.content || '';
                                             let refIdx = localRefStart;
-                                            let replaced = text.replace(/\[(\d+)\]\(@ref\)/g, function(_, n) {
+                                            let replaced = text.replace(/\[(\d+)\]\(@ref\)/g, function (_, n) {
                                                 return `[^${refIdx++}]`;
                                             });
                                             markdownContent += replaced + '\n\n';
@@ -142,11 +142,11 @@
                 state.latestResponseUrl = url;
                 state.lastUpdateTime = new Date().toLocaleTimeString();
             }
-        } catch (e) {}
+        } catch (e) { }
     }
     // fetch 拦截
     const originalFetch = window.fetch;
-    window.fetch = async function(...args) {
+    window.fetch = async function (...args) {
         const url = args[0] instanceof Request ? args[0].url : args[0];
         let response;
         try {
@@ -166,21 +166,21 @@
     const originalXhrOpen = XMLHttpRequest.prototype.open;
     const originalXhrSend = XMLHttpRequest.prototype.send;
     const xhrUrlMap = new WeakMap();
-    XMLHttpRequest.prototype.open = function(method, url) {
+    XMLHttpRequest.prototype.open = function (method, url) {
         xhrUrlMap.set(this, url);
         if (typeof url === 'string' && url.includes('/api/user/agent/conversation/v1/detail')) {
-            this.addEventListener('load', function() {
+            this.addEventListener('load', function () {
                 if (this.readyState === 4 && this.status === 200) {
                     const requestUrl = xhrUrlMap.get(this);
                     try {
                         processYuanbaoResponse(this.responseText, requestUrl);
-                    } catch (e) {}
+                    } catch (e) { }
                 }
             });
         }
         return originalXhrOpen.apply(this, arguments);
     };
-    XMLHttpRequest.prototype.send = function() {
+    XMLHttpRequest.prototype.send = function () {
         return originalXhrSend.apply(this, arguments);
     };
 
@@ -364,7 +364,7 @@
                                     if (block.type === 'text') {
                                         let msg = block.msg || '';
                                         if (msg && msg.includes('(@ref)')) {
-                                            msg = msg.replace(/\[(\d+)\]\(@ref\)/g, function(_, n) {
+                                            msg = msg.replace(/\[(\d+)\]\(@ref\)/g, function (_, n) {
                                                 return `[^${n}]`;
                                             });
                                         }
@@ -388,7 +388,7 @@
         }
 
         const btnAll = createBtn('全部', exportAllConversation);
-        const btnDialogue = createBtn('对话', () => {injectCopyButtons();});
+        const btnDialogue = createBtn('对话', () => { injectCopyButtons(); });
 
         el.appendChild(btnAll);
         el.appendChild(btnDialogue);
