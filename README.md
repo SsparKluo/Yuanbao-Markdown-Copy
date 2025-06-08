@@ -23,5 +23,5 @@
 
 ## 鸣谢
 
-部分思路和实现参考了 [腾讯元宝对话导出器 | Tencent Yuanbao Exporter]（by Gao + Gemini 2.5 Pro），并受益于 GitHub Copilot 及 GPT-4.1 的辅助。
+部分思路和实现参考了 [腾讯元宝对话导出器 | Tencent Yuanbao Exporter](https://greasyfork.org/zh-CN/scripts/532431-%E8%85%BE%E8%AE%AF%E5%85%83%E5%AE%9D%E5%AF%B9%E8%AF%9D%E5%AF%BC%E5%87%BA%E5%99%A8-tencent-yuanbao-exporter)（by Gao + Gemini 2.5 Pro），并受益于 GitHub Copilot 及 GPT-4.1 的辅助。
 
