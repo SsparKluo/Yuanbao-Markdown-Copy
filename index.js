@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yuanbao Markdown Copy
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  在腾讯元宝对话中添加一键复制Markdown按钮（含思考过程），需点击右上角按钮激活
 // @author       LouisLUO
 // @match        https://yuanbao.tencent.com/*
