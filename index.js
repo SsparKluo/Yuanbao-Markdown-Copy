@@ -22,6 +22,11 @@
         lastUpdateTime: null
     };
 
+    // 深灰背景，浅灰字体
+    const btnBg = '#13172c';
+    const btnBgHover = '#24293c';
+    const btnColor = '#efefef';
+
     // --- Markdown 转换函数 ---
     function adjustHeaderLevels(text, increaseBy = 1) {
         if (!text) return '';
@@ -194,18 +199,17 @@
             mdBtn.className = 'agent-chat__toolbar__copy-md';
             mdBtn.title = '复制Markdown（接口数据）';
             mdBtn.textContent = '复制MD';
-            // 深灰背景，浅灰字体
             mdBtn.style.marginLeft = '8px';
             mdBtn.style.padding = '2px 8px';
             mdBtn.style.border = 'none';
-            mdBtn.style.background = '#13172c';
-            mdBtn.style.color = '#efefef';
+            mdBtn.style.background = btnBg;
+            mdBtn.style.color = btnColor;
             mdBtn.style.borderRadius = '8px';
             mdBtn.style.cursor = 'pointer';
             mdBtn.style.fontSize = '14px';
             mdBtn.style.transition = 'background 0.2s';
-            mdBtn.onmouseover = () => { mdBtn.style.background = '#24293c'; };
-            mdBtn.onmouseout = () => { mdBtn.style.background = '#13172c'; };
+            mdBtn.onmouseover = () => { mdBtn.style.background = btnBgHover; };
+            mdBtn.onmouseout = () => { mdBtn.style.background = btnBg; };
             mdBtn.onclick = function (e) {
                 e.stopPropagation();
                 if (!state.latestDetailResponse) {
@@ -285,23 +289,27 @@
         el.style.alignItems = 'center';
         el.style.height = '34px';
 
-        // SVG for ExportOutlined (Ant Design)
-        const exportIconSvg = `
-            <svg viewBox="64 64 896 896" focusable="false" width="1em" height="1em" fill="currentColor" aria-hidden="true" style="margin-right:4px;">
-                <path d="M868 732h-70.3c-4.5 0-8.2 3.5-8.5 8-4.4 61.2-56.1 110-119.2 110H354c-65.2 0-118-53.2-118-118V354c0-63.1 48.8-114.8 110-119.2 4.5-0.3 8-4 8-8.5V156c0-4.4-3.6-8-8-8H156c-17.7 0-32 14.3-32 32v712c0 17.7 14.3 32 32 32h712c17.7 0 32-14.3 32-32V740c0-4.4-3.6-8-8-8z"></path>
-                <path d="M534 352V136c0-4.4-3.6-8-8-8h-28c-4.4 0-8 3.6-8 8v216H296c-7.7 0-11.5 9.3-6.1 14.7l200 200c3.1 3.1 8.2 3.1 11.3 0l200-200c5.4-5.4 1.6-14.7-6.1-14.7H534z"></path>
-            </svg>
-        `;
-
         // 深灰背景，浅灰字体
         const btnBg = '#13172c';
         const btnBgHover = '#24293c';
         const btnColor = '#efefef';
 
-        function createBtn(text, onclick) {
+        // SVG for ExportOutlined (Ant Design)
+        // const exportIconSvg = `...`; // 删除原有 SVG
+
+        // 使用 export-svgrepo-com.svg 作为“全部”按钮的 SVG
+        const exportIconSvgAll = `
+            <svg fill="#efefef" width="1em" height="1em" viewBox="0 0 20 20" style="margin-right:4px;vertical-align:middle;" xmlns="http://www.w3.org/2000/svg"><path d="M15 15H2V6h2.595s.689-.896 2.17-2H1a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1v-3.746l-2 1.645V15zm-1.639-6.95v3.551L20 6.4l-6.639-4.999v3.131C5.3 4.532 5.3 12.5 5.3 12.5c2.282-3.748 3.686-4.45 8.061-4.45z"/></svg>
+        `;
+        // “对话”按钮 SVG 替换为 dialogue-real-estate-svgrepo-com.svg
+        const exportIconSvg = `
+            <svg fill="#efefef" width="1em" height="1em" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:middle;" xmlns="http://www.w3.org/2000/svg"><path d="M21 2H3a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5v3.382a1 1 0 0 0 1.447.894L15.764 18H21a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1Zm-1 14h-5.382a1 1 0 0 0-.447.105L10 17.618V16a1 1 0 0 0-1-1H4V4h16ZM7 7h10v2H7Zm0 4h7v2H7Z"/></svg>
+        `;
+
+        function createBtn(text, onclick, iconSvg) {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.innerHTML = exportIconSvg + text;
+            btn.innerHTML = iconSvg + text;
             btn.style.display = 'flex';
             btn.style.alignItems = 'center';
             btn.style.justifyContent = 'center';
@@ -388,8 +396,8 @@
             navigator.clipboard.writeText(md);
         }
 
-        const btnAll = createBtn('全部', exportAllConversation);
-        const btnDialogue = createBtn('对话', () => { injectCopyButtons(); });
+        const btnAll = createBtn('全部', exportAllConversation, exportIconSvgAll);
+        const btnDialogue = createBtn('对话', () => { injectCopyButtons(); }, exportIconSvg);
 
         el.appendChild(btnAll);
         el.appendChild(btnDialogue);
