@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Yuanbao Markdown Copy
 // @namespace    http://tampermonkey.net/
-// @version      0.7
-// @description  在腾讯元宝对话中添加一键复制Markdown按钮（含思考过程），需点击右上角按钮激活
+// @version      0.8
+// @description  在腾讯元宝对话中添加一键复制Markdown按钮（含思考过程），可通过油猴菜单配置导出选项
 // @author       LouisLUO
 // @match        https://yuanbao.tencent.com/*
 // @icon         https://cdn-bot.hunyuan.tencent.com/logo-v2.png
-// @grant        none
+// @grant        GM_registerMenuCommand
 // @license MIT
 // ==/UserScript==
 
@@ -30,12 +30,19 @@
     // --- Markdown 转换函数 ---
     function adjustHeaderLevels(text, increaseBy = 1) {
         if (!text) return '';
-        return text.replace(/^(#+)(\s*)(.*?)\s*$/gm, (match, hashes, existingSpace, content) => {
+        // Adjusts existing markdown headers
+        let adjustedText = text.replace(/^(#+)(\s*)(.*?)\s*$/gm, (match, hashes, existingSpace, content) => {
             return '#'.repeat(hashes.length + increaseBy) + ' ' + content.trim();
         });
+        // Adjusts blockquoted headers like "> # user"
+        adjustedText = adjustedText.replace(/^>\s*(#+)(\s*)(.*?)\s*$/gm, (match, blockquotePrefix, hashes, existingSpace, content) => {
+            return blockquotePrefix + '#'.repeat(hashes.length + increaseBy) + ' ' + content.trim();
+        });
+        return adjustedText;
     }
 
     function convertYuanbaoJsonToMarkdown(jsonData, onlyIndex = null) {
+        const settings = getSettings();
         // 转换单轮对话为 Markdown
         if (!jsonData || !jsonData.convs || !Array.isArray(jsonData.convs)) {
             return '# 错误：无效的JSON数据\n\n无法解析对话内容。';
@@ -61,6 +68,11 @@
                 } else if (typeof turn.displayPrompt === 'string') {
                     userTextMsg = turn.displayPrompt;
                 }
+                if (settings.replaceFormulas) {
+                    userTextMsg = userTextMsg
+                        .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                        .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                }
                 markdownContent += userTextMsg + '\n';
                 if (turn.speechesV2 && turn.speechesV2.length > 0 && turn.speechesV2[0].content) {
                     let uploadedMedia = [];
@@ -80,35 +92,72 @@
                             speech.content.forEach(block => {
                                 switch (block.type) {
                                     case 'text':
-                                        // 处理引用格式
                                         let msg = block.msg || '';
-                                        if (msg && msg.includes('(@ref)')) {
+                                        if (settings.replaceFormulas) {
+                                            msg = msg
+                                                .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                        }
+                                        if (settings.keepSearchResults && msg && msg.includes('(@ref)')) {
                                             msg = msg.replace(/\[(\d+)\]\(@ref\)/g, function (_, n) {
                                                 return `[^${n}]`;
                                             });
+                                        } else if (!settings.keepSearchResults && msg && msg.includes('(@ref)')) {
+                                            msg = msg.replace(/\[\d+\]\(@ref\)/g, '').trim(); // Remove ref tags
                                         }
                                         markdownContent += `${msg}\n\n`;
                                         break;
                                     case 'think':
-                                        markdownContent += `<think>\n${block.content || ''}\n</think>\n\n`;
+                                        if (settings.exportThinkProcess) {
+                                            let thinkContent = block.content || '';
+                                            if (settings.replaceFormulas) {
+                                                thinkContent = thinkContent
+                                                    .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                    .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                            }
+                                            if (settings.thinkProcessFormat === 'markdown') {
+                                                markdownContent += `> ${thinkContent.replace(/\n/g, '\n> ')}\n\n`;
+                                            } else { // 'tag'
+                                                markdownContent += `<think>\n${thinkContent}\n</think>\n\n`;
+                                            }
+                                        }
                                         break;
                                     case 'searchGuid':
-                                        if (block.docs && block.docs.length > 0) {
+                                        if (settings.keepSearchResults) {
                                             let localRefStart = refCount;
-                                            block.docs.forEach((doc, docIndex) => {
-                                                refs.push({
-                                                    idx: refCount,
-                                                    title: doc.title || '无标题',
-                                                    url: doc.url || '#'
+                                            if (block.docs && block.docs.length > 0) {
+                                                block.docs.forEach((doc, docIndex) => {
+                                                    refs.push({
+                                                        idx: refCount,
+                                                        title: doc.title || '无标题',
+                                                        url: doc.url || '#'
+                                                    });
+                                                    refCount++;
                                                 });
-                                                refCount++;
-                                            });
+                                            }
                                             let text = block.msg || block.content || '';
+                                            if (settings.replaceFormulas) {
+                                                text = text
+                                                    .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                    .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                            }
                                             let refIdx = localRefStart;
                                             let replaced = text.replace(/\[(\d+)\]\(@ref\)/g, function (_, n) {
                                                 return `[^${refIdx++}]`;
                                             });
                                             markdownContent += replaced + '\n\n';
+                                        } else {
+                                            // Optionally, still add the text content if search results are off
+                                            let text = block.msg || block.content || '';
+                                            if (text) {
+                                                if (settings.replaceFormulas) {
+                                                    text = text
+                                                        .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                        .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                                }
+                                                text = text.replace(/\[\d+\]\(@ref\)/g, '').trim(); // Remove ref tags
+                                                markdownContent += text + '\n\n';
+                                            }
                                         }
                                         break;
                                     case 'image':
@@ -126,11 +175,14 @@
         });
         markdownContent = markdownContent.trim();
         // 追加引用链接
-        if (refs.length > 0) {
+        if (settings.keepSearchResults && refs.length > 0) {
             markdownContent += '\n\n';
             refs.forEach(ref => {
                 markdownContent += `[^${ref.idx}]: [${ref.title}](${ref.url})\n`;
             });
+        }
+        if (settings.headerDowngrade) {
+            markdownContent = adjustHeaderLevels(markdownContent);
         }
         return markdownContent.trim();
     }
@@ -190,8 +242,127 @@
         return originalXhrSend.apply(this, arguments);
     };
 
+    // --- 配置管理 ---
+    const DEFAULT_SETTINGS = {
+        autoInjectCopyBtn: true,
+        exportFormat: 'markdown', // 预留扩展
+        replaceFormulas: true,
+        exportThinkProcess: true,
+        thinkProcessFormat: 'tag', // 'tag' or 'markdown'
+        keepSearchResults: true,
+        headerDowngrade: false
+    };
+    function getSettings() {
+        try {
+            return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(localStorage.getItem('yuanbao_md_settings') || '{}'));
+        } catch {
+            return { ...DEFAULT_SETTINGS };
+        }
+    }
+    function saveSettings(settings) {
+        localStorage.setItem('yuanbao_md_settings', JSON.stringify(settings));
+    }
+    function showSettingsDialog() {
+        const settings = getSettings();
+        const html = `
+            <div style="font-size:14px; line-height: 1.8;">
+                <label>
+                    <input type="checkbox" id="autoInjectCopyBtn" ${settings.autoInjectCopyBtn ? 'checked' : ''}>
+                    自动注入“复制MD”按钮 (刷新生效)
+                </label>
+                <br>
+                <label>
+                    <input type="checkbox" id="replaceFormulas" ${settings.replaceFormulas ? 'checked' : ''}>
+                    替换行内/块公式语法 (<code>\\(..\\)</code> -> <code>$...$</code>, <code>\\[..\\]</code> -> <code>$$...$$</code>)
+                </label>
+                <br>
+                <label>
+                    <input type="checkbox" id="exportThinkProcess" ${settings.exportThinkProcess ? 'checked' : ''}>
+                    导出思考过程
+                </label>
+                <br>
+                <label style="padding-left: 20px;">
+                    思考过程格式:
+                    <select id="thinkProcessFormat" ${!settings.exportThinkProcess ? 'disabled' : ''}>
+                        <option value="tag" ${settings.thinkProcessFormat === 'tag' ? 'selected' : ''}>&lt;think&gt;标签</option>
+                        <option value="markdown" ${settings.thinkProcessFormat === 'markdown' ? 'selected' : ''}>Markdown引用</option>
+                    </select>
+                </label>
+                <br>
+                <label>
+                    <input type="checkbox" id="keepSearchResults" ${settings.keepSearchResults ? 'checked' : ''}>
+                    保留网页搜索内容和脚标
+                </label>
+                <br>
+                <label>
+                    <input type="checkbox" id="headerDowngrade" ${settings.headerDowngrade ? 'checked' : ''}>
+                    标题降级 (例: # -> ##)
+                </label>
+                <br>
+                <label style="display:none;">
+                    导出格式：
+                    <select id="exportFormat">
+                        <option value="markdown" ${settings.exportFormat === 'markdown' ? 'selected' : ''}>Markdown</option>
+                    </select>
+                </label>
+            </div>
+        `;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html;
+        // 简单弹窗
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.left = '50%';
+        modal.style.top = '50%';
+        modal.style.transform = 'translate(-50%,-50%)';
+        modal.style.background = '#222';
+        modal.style.color = '#fff';
+        modal.style.padding = '24px';
+        modal.style.borderRadius = '12px';
+        modal.style.zIndex = 99999;
+        modal.style.boxShadow = '0 2px 16px #0008';
+        modal.appendChild(wrapper);
+        const btnSave = document.createElement('button');
+        btnSave.textContent = '保存';
+        btnSave.style.margin = '16px 8px 0 0';
+        btnSave.onclick = () => {
+            const newSettings = {
+                autoInjectCopyBtn: wrapper.querySelector('#autoInjectCopyBtn').checked,
+                exportFormat: wrapper.querySelector('#exportFormat').value,
+                replaceFormulas: wrapper.querySelector('#replaceFormulas').checked,
+                exportThinkProcess: wrapper.querySelector('#exportThinkProcess').checked,
+                thinkProcessFormat: wrapper.querySelector('#thinkProcessFormat').value,
+                keepSearchResults: wrapper.querySelector('#keepSearchResults').checked,
+                headerDowngrade: wrapper.querySelector('#headerDowngrade').checked
+            };
+            saveSettings(newSettings);
+            document.body.removeChild(modal);
+            alert('设置已保存，部分设置需刷新页面生效');
+        };
+        const btnCancel = document.createElement('button');
+        btnCancel.textContent = '取消';
+        btnCancel.onclick = () => document.body.removeChild(modal);
+        modal.appendChild(btnSave);
+        modal.appendChild(btnCancel);
+        document.body.appendChild(modal);
+
+        // 联动思考过程格式的禁用状态
+        const exportThinkProcessCheckbox = wrapper.querySelector('#exportThinkProcess');
+        const thinkProcessFormatSelect = wrapper.querySelector('#thinkProcessFormat');
+        exportThinkProcessCheckbox.addEventListener('change', function() {
+            thinkProcessFormatSelect.disabled = !this.checked;
+        });
+    }
+
+    // 注册菜单命令
+    if (typeof GM_registerMenuCommand === 'function') {
+        GM_registerMenuCommand('脚本设置', showSettingsDialog);
+    }
+
     // --- 注入每个对话泡的复制按钮 ---
     function injectCopyButtons() {
+        const settings = getSettings();
+        if (!settings.autoInjectCopyBtn) return;
         // 遍历所有对话泡，注入“复制MD”按钮
         document.querySelectorAll('.agent-chat__toolbar__copy').forEach(copyBtn => {
             if (copyBtn.parentElement.querySelector('.agent-chat__toolbar__copy-md')) return;
@@ -274,6 +445,10 @@
                         }
                     });
                 }
+                // 自动注入“复制MD”按钮（每次有新节点时都尝试）
+                if (getSettings().autoInjectCopyBtn) {
+                    injectCopyButtons();
+                }
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
@@ -332,6 +507,7 @@
 
         // 导出全部对话，分割符 > # user 和 > # agent，顺序正序
         function exportAllConversation() {
+            const settings = getSettings();
             if (!state.latestDetailResponse) {
                 alert('未捕获到对话数据，请刷新页面或重新进入对话。');
                 return;
@@ -348,10 +524,12 @@
                 return;
             }
             let md = '';
+            let refs = [];
+            let refCount = 1;
             // 正序导出
             jsonData.convs.slice().reverse().forEach(turn => {
                 if (turn.speaker === 'human') {
-                    md += '> # user\n';
+                    md += (settings.headerDowngrade ? '> ## user\n' : '> # user\n');
                     let userTextMsg = '';
                     if (turn.speechesV2 && turn.speechesV2.length > 0 && turn.speechesV2[0].content) {
                         const textBlock = turn.speechesV2[0].content.find(block => block.type === 'text');
@@ -363,26 +541,88 @@
                     } else if (typeof turn.displayPrompt === 'string') {
                         userTextMsg = turn.displayPrompt;
                     }
+                    // 数学公式替换
+                    if (settings.replaceFormulas) {
+                        userTextMsg = userTextMsg
+                            .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                            .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                    }
                     md += (userTextMsg || '') + '\n\n';
                 } else if (turn.speaker === 'ai') {
-                    md += '> # agent\n';
+                    md += (settings.headerDowngrade ? '> ## agent\n' : '> # agent\n');
                     if (turn.speechesV2 && turn.speechesV2.length > 0) {
                         turn.speechesV2.forEach(speech => {
                             if (speech.content && speech.content.length > 0) {
                                 speech.content.forEach(block => {
                                     if (block.type === 'text') {
                                         let msg = block.msg || '';
-                                        if (msg && msg.includes('(@ref)')) {
+                                        if (settings.replaceFormulas) {
+                                            msg = msg
+                                                .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                        }
+                                        // 处理引用格式
+                                        if (settings.keepSearchResults && msg && msg.includes('(@ref)')) {
                                             msg = msg.replace(/\[(\d+)\]\(@ref\)/g, function (_, n) {
                                                 return `[^${n}]`;
                                             });
+                                        } else if (!settings.keepSearchResults && msg && msg.includes('(@ref)')) {
+                                            msg = msg.replace(/\[\d+\]\(@ref\)/g, '').trim(); // Remove ref tags
                                         }
                                         md += msg + '\n\n';
                                     } else if (block.type === 'think') {
-                                        md += `<think>\n${block.content || ''}\n</think>\n\n`;
+                                        if (settings.exportThinkProcess) {
+                                            let thinkContent = block.content || '';
+                                            if (settings.replaceFormulas) {
+                                                thinkContent = thinkContent
+                                                    .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                    .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                            }
+                                            if (settings.thinkProcessFormat === 'markdown') {
+                                                md += `> ${thinkContent.replace(/\n/g, '\n> ')}\n\n`;
+                                            } else { // 'tag'
+                                                md += `<think>\n${thinkContent}\n</think>\n\n`;
+                                            }
+                                        }
                                     } else if (block.type === 'searchGuid') {
-                                        let text = block.msg || block.content || '';
-                                        md += text + '\n\n';
+                                        if (settings.keepSearchResults) {
+                                            // 记录引用
+                                            if (block.docs && block.docs.length > 0) {
+                                                block.docs.forEach(doc => {
+                                                    refs.push({
+                                                        idx: refCount,
+                                                        title: doc.title || '无标题',
+                                                        url: doc.url || '#'
+                                                    });
+                                                    refCount++;
+                                                });
+                                            }
+                                            let text = block.msg || block.content || '';
+                                            if (settings.replaceFormulas) {
+                                                text = text
+                                                    .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                    .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                            }
+                                            // 脚标替换
+                                            let localRefStart = refCount - (block.docs ? block.docs.length : 0);
+                                            let refIdx = localRefStart;
+                                            let replaced = text.replace(/\[(\d+)\]\(@ref\)/g, function (_, n) {
+                                                return `[^${refIdx++}]`;
+                                            });
+                                            md += replaced + '\n\n';
+                                        } else {
+                                            // Optionally, still add the text content if search results are off
+                                            let text = block.msg || block.content || '';
+                                            if (text) {
+                                                if (settings.replaceFormulas) {
+                                                    text = text
+                                                        .replace(/\\\((.+?)\\\)/g, (m, p1) => `$${p1}$`)
+                                                        .replace(/\\\[(.+?)\\\]/gs, (m, p1) => `$$${p1}$$`);
+                                                }
+                                                text = text.replace(/\[\d+\]\(@ref\)/g, '').trim(); // Remove ref tags
+                                                md += text + '\n\n';
+                                            }
+                                        }
                                     } else if (block.type === 'image' || block.type === 'code' || block.type === 'pdf') {
                                         md += `[${block.fileName || '未知文件'}](${block.url || '#'})\n\n`;
                                     }
@@ -393,6 +633,17 @@
                 }
             });
             md = md.trim();
+            // 追加引用链接
+            if (settings.keepSearchResults && refs.length > 0) {
+                md += '\n\n';
+                refs.forEach(ref => {
+                    md += `[^${ref.idx}]: [${ref.title}](${ref.url})\n`;
+                });
+            }
+            // Note: headerDowngrade for "> # user/agent" is handled directly above.
+            // If other headers exist in the content, adjustHeaderLevels could be applied here too,
+            // but it's primarily for the single-turn export.
+            // For "exportAllConversation", the main structural headers are already conditionally adjusted.
             navigator.clipboard.writeText(md);
         }
 
@@ -407,6 +658,7 @@
     // --- 初始化 ---
     function init() {
         observeAgentDialogueTool();
+        // 不再需要在这里调用 injectCopyButtons，交由 observer 统一管理
     }
 
     if (document.readyState === 'loading') {
